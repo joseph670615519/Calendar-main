@@ -163,11 +163,15 @@ header {
 .close-popup:hover {
   color: #005fa3;
 }
+
 #topButtons {
   margin: 15px 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
 }
 
-#viewAllEvents, #backToCalendar {
+#viewAllEvents, #backToCalendar, #jumpToToday {
   background: #0078d7;
   color: white;
   border: none;
@@ -176,7 +180,7 @@ header {
   cursor: pointer;
   margin-top: 10px;
 }
-#viewAllEvents:hover, #backToCalendar:hover {
+#viewAllEvents:hover, #backToCalendar:hover, #jumpToToday:hover {
   background: #005fa3;
 }
 
@@ -273,3 +277,78 @@ header {
   background: #e5f1ff;
 }
 
+/* ===== Month/Year Picker Screen ===== */
+#pickerScreen {
+  display: none;
+  background: #f8f8ff;
+  width: 100%;
+  height: 100vh;
+  position: absolute;
+  top: 0;
+  left: 0;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  z-index: 2000;
+}
+
+#pickerHeader {
+  font-size: 2em;
+  color: #0078d7;
+  margin-bottom: 30px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+#pickerHeader:hover {
+  color: #005fa3;
+}
+
+/* ✅ Centered Month/Year Grid */
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 25px;
+  justify-content: center;
+  align-content: center;
+  width: 80%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.picker-item {
+  background: #0078d7;
+  color: white;
+  padding: 20px 0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1.3em;
+  transition: background 0.2s, transform 0.1s;
+  text-align: center;
+}
+.picker-item:hover {
+  background: #005fa3;
+  transform: scale(1.05);
+}
+
+#backToCalendarFromPicker {
+  margin-top: 40px;
+  background: #0078d7;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1em;
+}
+#backToCalendarFromPicker:hover {
+  background: #005fa3;
+}
+
+#monthYearClickable {
+  cursor: pointer;
+  color: black;
+  transition: color 0.2s;
+}
+#monthYearClickable:hover {
+  color: #0078d7;
+}

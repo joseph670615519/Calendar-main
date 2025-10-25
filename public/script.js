@@ -66,7 +66,7 @@ $(document).ready(function () {
       $("#formMessage").text("Event added!");
       $("#addEventForm")[0].reset();
       $("#calendar").fadeOut(200).fadeIn(400);
-      // no need to call loadEvents(), onSnapshot handles updates automatically
+      // onSnapshot auto-updates the view
     } catch (err) {
       $("#formMessage").text("Error adding event: " + err.message);
     }
@@ -91,22 +91,6 @@ function setupRealtimeListener(month, year) {
 // ==============================
 // Functions
 // ==============================
-async function loadEvents(month, year) {
-  $("#calendar").html("<p>Loading...</p>");
-  try {
-    const querySnapshot = await getDocs(collection(db, "appointments"));
-    const events = [];
-    querySnapshot.forEach((docSnap) => {
-      events.push({ id: docSnap.id, ...docSnap.data() });
-    });
-
-    renderCalendar(month, year, events);
-  } catch (err) {
-    $("#calendar").html("<p style='color:red;'>Error loading events.</p>");
-    console.error(err);
-  }
-}
-
 function renderCalendar(month, year, events = []) {
   const calendar = $("#calendar");
   calendar.empty();
@@ -118,7 +102,12 @@ function renderCalendar(month, year, events = []) {
     "January","February","March","April","May","June",
     "July","August","September","October","November","December"
   ];
-  $("#monthYear").text(`${monthNames[month]} ${year}`);
+  $("#monthYear").html(`<span id="monthYearClickable">${monthNames[month]} ${year}</span>`);
+
+  // click month-year → open month picker
+  $("#monthYearClickable").off("click").on("click", function () {
+    showMonthPicker(year);
+  });
 
   for (let i = 0; i < firstDay; i++) {
     calendar.append(`<div class="day blank"></div>`);
@@ -171,7 +160,6 @@ function renderCalendar(month, year, events = []) {
           <button id="addEventNo">No</button>
         </li>
       `);
-
       addInlineAddHandlers(popupList, formatted);
     }
 
@@ -187,7 +175,7 @@ function renderCalendar(month, year, events = []) {
         `);
       });
 
-      // "Add another event?" section (CENTERED)
+      // "Add another event?" section
       popupList.append(`
         <li class="add-event-section">
           <div>Add another event?</div>
@@ -269,6 +257,61 @@ function renderCalendar(month, year, events = []) {
       if (e.target !== this && !$(e.target).hasClass("close-popup")) return;
       $("#eventPopup").fadeOut(200);
     });
+}
+
+// ==============================
+// Month Picker + Year Picker
+// ==============================
+function showMonthPicker(year) {
+  $("#calendar, .weekdays, #event-form, #calendar-controls").hide();
+  $("#pickerScreen").show();
+
+  $("#pickerHeader").text(year);
+  const grid = $("#pickerGrid");
+  grid.empty();
+
+  const months = [
+    "January", "February", "March", "April",
+    "May", "June", "July", "August",
+    "September", "October", "November", "December"
+  ];
+
+  months.forEach((m, index) => {
+    const div = $(`<div class="picker-item">${m}</div>`);
+    div.on("click", function () {
+      currentMonth = index;
+      currentYear = year;
+      $("#pickerScreen").hide();
+      $("#calendar, .weekdays, #event-form, #calendar-controls").show();
+      renderCalendar(currentMonth, currentYear);
+      setupRealtimeListener(currentMonth, currentYear);
+    });
+    grid.append(div);
+  });
+
+  $("#pickerHeader").off("click").on("click", function () {
+    showYearPicker(year);
+  });
+}
+
+function showYearPicker(selectedYear) {
+  $("#pickerHeader").text(`Select Year`);
+  const grid = $("#pickerGrid");
+  grid.empty();
+
+  const startYear = Math.floor(selectedYear / 16) * 16;
+  const years = [];
+  for (let i = startYear; i < startYear + 16; i++) {
+    years.push(i);
+  }
+
+  years.forEach((year) => {
+    const div = $(`<div class="picker-item">${year}</div>`);
+    div.on("click", function () {
+      showMonthPicker(year);
+    });
+    grid.append(div);
+  });
 }
 
 // ==============================
@@ -470,4 +513,37 @@ $("#viewAllEvents").on("click", async function () {
 $("#backToCalendar").on("click", function () {
   $("#allEventsSection").hide();
   $("#calendar, #event-form, #topButtons, #calendar-controls, .weekdays").show();
+});
+
+// ==============================
+// Jump to Today Button
+// ==============================
+$("#jumpToToday").on("click", function () {
+  const now = new Date();
+  currentMonth = now.getMonth();
+  currentYear = now.getFullYear();
+
+  // Ensure main calendar is visible (in case user is on view-all or picker)
+  $("#pickerScreen, #allEventsSection").hide();
+  $("#calendar, #event-form, #topButtons, #calendar-controls, .weekdays").show();
+
+  // Re-render the calendar
+  renderCalendar(currentMonth, currentYear);
+  setupRealtimeListener(currentMonth, currentYear);
+
+  // Optional: Brief highlight of today's date
+  setTimeout(() => {
+    $(".today").css({ background: "#00bfff" });
+    setTimeout(() => $(".today").css({ background: "#e9f5ff" }), 1000);
+  }, 300);
+});
+
+// ==============================
+// Back to Calendar from month/year picker
+// ==============================
+$("#backToCalendarFromPicker").on("click", function () {
+  $("#pickerScreen").hide(); // hide month/year picker
+  $("#calendar, #event-form, #topButtons, #calendar-controls, .weekdays").show();
+  renderCalendar(currentMonth, currentYear);
+  setupRealtimeListener(currentMonth, currentYear);
 });
