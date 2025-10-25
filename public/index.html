@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calendar App</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Load jQuery -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+
+ 
+</head>
+
+
+<body>
+  <header><h1>Joe's Calendar</h1></header>
+
+  <main>
+    <section id="calendar-controls">
+      <button id="prevMonth">◀ Prev</button>
+      <h2 id="monthYear"></h2>
+      <button id="nextMonth">Next ▶</button>
+    </section>
+
+    <div id="topButtons">
+  <button id="viewAllEvents">View All Events</button>
+</div>
+
+<section id="allEventsSection" style="display:none;">
+  <h2>All Scheduled Events</h2>
+  <ul id="allEventsList"></ul>
+  <button id="backToCalendar">⬅ Back to Calendar</button>
+</section>
+
+    <section class="weekdays">
+      <div>Sun</div><div>Mon</div><div>Tue</div>
+      <div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+    </section>
+
+    <section id="calendar" class="calendar-grid"></section>
+
+    <section id="event-form">
+      <h3>Add Event</h3>
+      <form id="addEventForm">
+        <label>Title: <input type="text" id="title" required /></label><span class="error"></span><br>
+        <label>Date: <input type="date" id="date" required /></label><span class="error"></span><br>
+        <label>Details: <input type="text" id="details" placeholder="optional" /></label><span class="error"></span><br>
+        <button type="submit">Add Event</button>
+      </form>
+      <p id="formMessage"></p>
+    </section>
+  </main>
+
+  <footer><p>&copy; ISNE Calendar Project</p></footer>
+
+<div id="eventPopup" class="popup-overlay">
+  <div class="popup-content">
+    <span class="close-popup">&times;</span>
+    <h3 id="popupDate"></h3>
+    <ul id="popupEvents"></ul>
+  </div>
+</div>
+
+<script type="module" src="script.js"></script>
+</body>
+</html>
