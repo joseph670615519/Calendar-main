@@ -33,6 +33,7 @@ let today = new Date();
 let currentMonth = today.getMonth();
 let currentYear = today.getFullYear();
 let unsubscribe = null; // real-time listener cleanup
+let liveEvents = [];
 
 $(document).ready(function () {
   renderCalendar(currentMonth, currentYear);
@@ -40,6 +41,9 @@ $(document).ready(function () {
 
   $("#prevMonth").click(() => changeMonth(-1));
   $("#nextMonth").click(() => changeMonth(1));
+    $("#hasTime").on("change", function () {
+    $("#timeInputs").toggle(this.checked);
+  });
 
   $("#addEventForm").on("submit", async function (e) {
     e.preventDefault();
@@ -47,6 +51,9 @@ $(document).ready(function () {
     const title = $("#title").val().trim();
     const date = $("#date").val().trim();
     const details = $("#details").val().trim() || "(no details)";
+    const hasTime = $("#hasTime").is(":checked");
+    const startTime = hasTime ? $("#startTime").val() : "";
+    const endTime = hasTime ? $("#endTime").val() : "";
 
     $(".error").text("");
     let valid = true;
@@ -62,7 +69,7 @@ $(document).ready(function () {
 
     try {
       $("#formMessage").text("Saving...");
-      await addDoc(collection(db, "appointments"), { title, date, details });
+      await addDoc(collection(db, "appointments"), { title, date, details, startTime, endTime });
       $("#formMessage").text("Event added!");
       $("#addEventForm")[0].reset();
       $("#calendar").fadeOut(200).fadeIn(400);
@@ -74,19 +81,39 @@ $(document).ready(function () {
 });
 
 // ==============================
-// Real-time Firestore Listener
+// Real-time Firestore Listener (fixed version)
 // ==============================
 function setupRealtimeListener(month, year) {
   if (unsubscribe) unsubscribe(); // detach old listener
+
   const q = collection(db, "appointments");
   unsubscribe = onSnapshot(q, (snapshot) => {
-    const events = [];
+    liveEvents = []; // store latest snapshot globally
     snapshot.forEach((docSnap) => {
-      events.push({ id: docSnap.id, ...docSnap.data() });
+      liveEvents.push({ id: docSnap.id, ...docSnap.data() });
+          if ($("#eventPopup").is(":visible")) {
+      refreshOpenPopup(liveEvents);
+    }
     });
-    renderCalendar(month, year, events);
+
+    // Refresh main calendar
+    if ($("#calendar").is(":visible")) {
+      renderCalendar(month, year, liveEvents);
+    }
+
+    // Refresh popup if visible
+    refreshOpenPopup(liveEvents);
+
+    // Refresh "View All Events"
+    if ($("#allEventsSection").is(":visible")) {
+      updateAllEventsList(liveEvents);
+    }
   });
 }
+
+
+
+
 
 // ==============================
 // Functions
@@ -109,9 +136,15 @@ function renderCalendar(month, year, events = []) {
     showMonthPicker(year);
   });
 
-  for (let i = 0; i < firstDay; i++) {
-    calendar.append(`<div class="day blank"></div>`);
-  }
+const prevMonthDays = 32 - new Date(year, month - 1, 32).getDate();
+
+// ==== Previous month gray days (tail) ====
+for (let i = firstDay - 1; i >= 0; i--) {
+  const day = prevMonthDays - i;
+  const cell = $("<div>").addClass("day other-month").text(day);
+  calendar.append(cell);
+}
+
 
   for (let day = 1; day <= daysInMonth; day++) {
     const fullDate = new Date(year, month, day);
@@ -135,9 +168,22 @@ function renderCalendar(month, year, events = []) {
     calendar.append(cell);
   }
 
-  // ========== POPUP HANDLER ==========
-  $(".day").off("click").on("click", function () {
-    if ($(this).hasClass("blank")) return;
+const totalCells = firstDay + daysInMonth;
+const nextDays = 7 * Math.ceil(totalCells / 7) - totalCells;
+
+// ==== Next month gray days (head) ====
+for (let i = 1; i <= nextDays; i++) {
+  const cell = $("<div>").addClass("day other-month").text(i);
+  calendar.append(cell);
+}
+
+
+
+
+// ========== POPUP HANDLER ==========
+$(".day").off("click").on("click", function (e) {
+  // Ignore gray cells (they already have special behavior)
+  if ($(this).hasClass("blank") || $(this).hasClass("other-month")) return;
 
     const dayNumber = $(this).clone().children().remove().end().text().trim();
     const clickedDate = new Date(year, month, dayNumber);
@@ -166,14 +212,17 @@ function renderCalendar(month, year, events = []) {
     // --- Case 2: Events exist for this day ---
     else {
       dayEvents.forEach((ev) => {
-        popupList.append(`
-          <li data-id="${ev.id}">
-            <strong>${ev.title}</strong><br>${ev.details}<br>
-            <button class="edit-btn">✏ Edit</button>
-            <button class="delete-btn">🗑 Delete</button>
-          </li>
-        `);
+      popupList.append(`
+        <li data-id="${ev.id}">
+          <strong>${ev.title}</strong><br>
+          ${ev.startTime ? `${ev.startTime} - ${ev.endTime}<br>` : ""}
+          ${ev.details}<br>
+          <button class="edit-btn">✏ Edit</button>
+          <button class="delete-btn">🗑 Delete</button>
+        </li>
+      `);
       });
+      
 
       // "Add another event?" section
       popupList.append(`
@@ -199,52 +248,107 @@ function renderCalendar(month, year, events = []) {
       });
 
       // Edit event
-      $(".edit-btn").off("click").on("click", function () {
-        const li = $(this).closest("li");
-        const id = li.data("id");
-        const oldTitle = li.find("strong").text();
-        const oldDetails = li
-          .contents()
-          .filter(function () {
-            return this.nodeType === 3;
-          })
-          .text()
-          .trim();
+$(".edit-btn").off("click").on("click", function () {
+  const li = $(this).closest("li");
+  const id = li.data("id");
+  const oldTitle = li.find("strong").text();
+  const dateText = $("#popupDate").text();
 
-        li.html(`
-          <form class="editForm">
-            <input type="text" name="title" value="${oldTitle}" required /><br>
-            <input type="text" name="date" value="${$("#popupDate").text()}" disabled /><br>
-            <input type="text" name="details" value="${oldDetails}" placeholder="(no details)" /><br>
-            <button type="submit">💾 Save</button>
-            <button type="button" class="cancelEdit">✖ Cancel</button>
-          </form>
-        `);
+  // Extract time if available
+  const timeMatch = li.html().match(/(\d{2}:\d{2}) - (\d{2}:\d{2})/);
+  const oldStart = timeMatch ? timeMatch[1] : "";
+  const oldEnd = timeMatch ? timeMatch[2] : "";
 
-        li.find(".editForm").on("submit", async function (e) {
-          e.preventDefault();
-          const newTitle = $(this).find("input[name='title']").val().trim();
-          const newDetails =
-            $(this).find("input[name='details']").val().trim() || "(no details)";
-          try {
-            await updateDoc(doc(db, "appointments", id), {
-              title: newTitle,
-              details: newDetails,
-            });
-            $("#eventPopup").fadeOut(200);
-          } catch (err) {
-            alert("Error updating event: " + err.message);
-          }
-        });
+  // Extract details (text not part of <strong> or time)
+let oldDetails = li
+  .clone()
+  .children()
+  .remove()
+  .end()
+  .text()
+  .trim()
+  .replace(/\s+/g, " ");
 
-        li.find(".cancelEdit").on("click", function () {
-          li.html(`
-            <strong>${oldTitle}</strong><br>${oldDetails}<br>
-            <button class="edit-btn">✏ Edit</button>
-            <button class="delete-btn">🗑 Delete</button>
-          `);
-        });
-      });
+// remove any embedded time text like “12:00 - 14:00”
+oldDetails = oldDetails.replace(/\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/, "").trim();
+
+if (!oldDetails) oldDetails = "(no details)";
+
+  li.html(`
+    <form class="editForm" style="text-align:left;">
+      <input type="text" name="title" value="${oldTitle}" required /><br>
+      <input type="text" name="date" value="${dateText}" disabled /><br>
+      <input type="text" name="details" value="${oldDetails}" placeholder="(no details)" /><br>
+
+      <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+        <label for="hasTime">Specific Time</label>
+        <input type="checkbox" id="hasTime" ${oldStart ? "checked" : ""}>
+      </div>
+
+      <div id="timeInputs" style="display:${oldStart ? "block" : "none"}; margin-top:4px;">
+        <input type="time" id="startTime" value="${oldStart}" placeholder="Start Time"><br>
+        <input type="time" id="endTime" value="${oldEnd}" placeholder="End Time"><br>
+      </div>
+
+      <button type="submit">💾 Save</button>
+      <button type="button" class="cancelEdit">✖ Cancel</button>
+    </form>
+  `);
+
+  // Show/hide time fields
+  li.find("#hasTime").on("change", function () {
+    li.find("#timeInputs").toggle(this.checked);
+  });
+
+  // Handle save
+li.find(".editForm").on("submit", async function (e) {
+  e.preventDefault();
+  const newTitle = $(this).find("input[name='title']").val().trim();
+  const newDetails =
+    $(this).find("input[name='details']").val().trim() || "(no details)";
+  const hasTime = li.find("#hasTime").is(":checked");
+  let newStart = hasTime ? li.find("#startTime").val() : "";
+  let newEnd = hasTime ? li.find("#endTime").val() : "";
+
+  // ✅ If "Specific Time" is unchecked, clear both times completely
+  if (!hasTime) {
+    newStart = "";
+    newEnd = "";
+  }
+
+  // ✅ If "Specific Time" is checked but both are blank, clear too
+  if (hasTime && !newStart && !newEnd) {
+    newStart = "";
+    newEnd = "";
+  }
+
+  try {
+    await updateDoc(doc(db, "appointments", id), {
+      title: newTitle,
+      details: newDetails,
+      startTime: newStart,
+      endTime: newEnd,
+    });
+
+    $("#eventPopup").fadeOut(200);
+  } catch (err) {
+    alert("Error updating event: " + err.message);
+  }
+});
+
+
+
+  // Handle cancel
+  li.find(".cancelEdit").on("click", function () {
+    li.html(`
+      <strong>${oldTitle}</strong><br>
+      ${oldStart ? `${oldStart} - ${oldEnd}<br>` : ""}
+      ${oldDetails}<br>
+      <button class="edit-btn">✏ Edit</button>
+      <button class="delete-btn">🗑 Delete</button>
+    `);
+  });
+});
     }
 
     $("#eventPopup").fadeIn(200);
@@ -258,6 +362,25 @@ function renderCalendar(month, year, events = []) {
       $("#eventPopup").fadeOut(200);
     });
 }
+
+// ==== Gray-day month switching (after global click handler) ====
+$("#calendar").off("click", ".other-month").on("click", ".other-month", function (e) {
+  e.stopImmediatePropagation();
+  const dayText = parseInt($(this).text(), 10);
+
+  // Determine if it's a previous or next month gray day
+  const isPrev = $(this).index() < 7 && dayText > 20; // likely from previous month
+  const isNext = $(this).index() > 20 && dayText < 10; // likely from next month
+
+  if (isPrev) {
+    changeMonth(-1, dayText);
+  } else if (isNext) {
+    changeMonth(1, dayText);
+  }
+});
+
+
+
 
 // ==============================
 // Month Picker + Year Picker
@@ -326,44 +449,131 @@ function addInlineAddHandlers(popupList, formatted, isAnother = false) {
   });
 
   $(yesBtn).off("click").on("click", function () {
+popupList.append(`
+  <li>
+    <form id="inlineAddForm" style="text-align:left;">
+      <input type="text" id="newTitle" placeholder="Event title" required /><br>
+      <input type="text" id="newDate" value="${formatted}" disabled /><br>
+      <input type="text" id="newDetails" placeholder="(no details)" /><br>
+
+<div style="display:flex; align-items:center; gap:4px; margin-top:6px; white-space:nowrap;">
+  <span>Specific Time</span>
+  <input type="checkbox" id="newHasTime" style="margin:0; transform:translateX(-95px);">
+</div>
+
+      <div id="newTimeInputs" style="display:none; margin-top:4px;">
+        <input type="time" id="newStartTime" placeholder="Start Time"><br>
+        <input type="time" id="newEndTime" placeholder="End Time"><br>
+      </div>
+
+      <button type="submit">💾 Save</button>
+      <button type="button" id="cancelAdd">✖ Cancel</button>
+    </form>
+  </li>
+`);
+
+
+// Show/hide time inputs
+$("#newHasTime").on("change", function() {
+  $("#newTimeInputs").toggle(this.checked);
+});
+
+$("#cancelAdd").on("click", function () {
+  $("#eventPopup").fadeOut(200);
+});
+
+$("#inlineAddForm").on("submit", async function (e) {
+  e.preventDefault();
+  const title = $("#newTitle").val().trim();
+  const details = $("#newDetails").val().trim() || "(no details)";
+  const hasTime = $("#newHasTime").is(":checked");
+  const startTime = hasTime ? $("#newStartTime").val() : "";
+  const endTime = hasTime ? $("#newEndTime").val() : "";
+  try {
+    await addDoc(collection(db, "appointments"), {
+      title,
+      date: formatted,
+      details,
+      startTime,
+      endTime,
+    });
+    $("#eventPopup").fadeOut(200);
+  } catch (err) {
+    alert("Error adding event: " + err.message);
+  }
+});
+
+
+
+    
+
+
+  });
+
+  
+}
+function openPopupForDate(dateObj) {
+  const iso = dateObj.toLocaleDateString("en-CA");
+
+  $("#popupDate")
+    .text(dateObj.toDateString())
+    .attr("data-iso", iso);
+
+
+  $("#popupEvents").fadeTo(100, 0.3, () => {
+    refreshOpenPopup(liveEvents); // build popup from latest snapshot
+    $("#popupEvents").fadeTo(150, 1);
+  });
+
+  $("#eventPopup").fadeIn(200);
+}
+
+  
+
+
+
+// ===============================================
+// Refresh the open popup from in-memory events
+// ===============================================
+function refreshOpenPopup(events) {
+
+
+  const iso = $("#popupDate").attr("data-iso");
+  if (!iso) return;
+
+  const dayEvents = events.filter(ev => normalizeDate(ev.date) === iso);
+  const popupList = $("#popupEvents");
+  popupList.empty();
+
+  if (dayEvents.length === 0) {
     popupList.append(`
-      <li>
-        <form id="inlineAddForm">
-          <input type="text" id="newTitle" placeholder="Event title" required /><br>
-          <input type="text" id="newDate" value="${formatted}" disabled /><br>
-          <input type="text" id="newDetails" placeholder="(no details)" /><br>
-          <button type="submit">💾 Save</button>
-          <button type="button" id="cancelAdd">✖ Cancel</button>
-        </form>
+      <li class="add-event-section">
+        <div>No events for this day.<br>Would you like to add one?</div>
+        <button id="addEventYes">Yes</button>
+        <button id="addEventNo">No</button>
       </li>
     `);
-
-    $("#cancelAdd").on("click", function () {
-      $("#eventPopup").fadeOut(200);
+    addInlineAddHandlers(popupList, iso);
+  } else {
+    dayEvents.forEach(ev => {
+      popupList.append(`
+        <li data-id="${ev.id}">
+          <strong>${ev.title}</strong><br>
+          ${ev.startTime ? `${ev.startTime} - ${ev.endTime}<br>` : ""}
+          ${ev.details}<br>
+          <button class="edit-btn">✏ Edit</button>
+          <button class="delete-btn">🗑 Delete</button>
+        </li>
+      `);
     });
-
-    $("#inlineAddForm").on("submit", async function (e) {
-      e.preventDefault();
-      const title = $("#newTitle").val().trim();
-      const details = $("#newDetails").val().trim() || "(no details)";
-      try {
-        await addDoc(collection(db, "appointments"), {
-          title,
-          date: formatted,
-          details,
-        });
-        $("#eventPopup").fadeOut(200);
-      } catch (err) {
-        alert("Error adding event: " + err.message);
-      }
-    });
-  });
+  }
 }
+
 
 // ==============================
 // Helpers
 // ==============================
-function changeMonth(offset) {
+async function changeMonth(offset, targetDay = null) {
   currentMonth += offset;
   if (currentMonth < 0) {
     currentMonth = 11;
@@ -372,8 +582,28 @@ function changeMonth(offset) {
     currentMonth = 0;
     currentYear++;
   }
+
+  // Load events first (so popup will show correct data)
+  const snapshot = await getDocs(collection(db, "appointments"));
+  const events = [];
+  snapshot.forEach(docSnap => events.push({ id: docSnap.id, ...docSnap.data() }));
+
+  // Render the new month with events
+  renderCalendar(currentMonth, currentYear, events);
+
+  // Re-attach listener for live updates
   setupRealtimeListener(currentMonth, currentYear);
+
+  // If a gray day was clicked, open its popup after render
+  if (targetDay !== null) {
+    setTimeout(() => {
+      const newDate = new Date(currentYear, currentMonth, targetDay);
+      openPopupForDate(newDate);
+    }, 200);
+  }
 }
+
+
 
 function normalizeDate(input) {
   if (!input) return "";
@@ -419,17 +649,29 @@ $("#viewAllEvents").on("click", async function () {
 
     const list = $("#allEventsList");
     list.empty();
-    events.forEach((ev) => {
-      list.append(`
-        <li data-id="${ev.id}">
-          <strong>${ev.title}</strong>
-          <div>Date: ${normalizeDate(ev.date)}</div>
-          <div>Details: ${ev.details}</div>
-          <button class="edit-btn">✏ Edit</button>
-          <button class="delete-btn">🗑 Delete</button>
-        </li>
-      `);
-    });
+events.forEach((ev) => {
+  const timeDisplay =
+    ev.startTime && ev.endTime
+      ? `${ev.startTime} - ${ev.endTime}`
+      : ev.startTime
+      ? `${ev.startTime}`
+      : "";
+
+  list.append(`
+    <li data-id="${ev.id}">
+      <strong>${ev.title}</strong>
+      <div>Date: ${normalizeDate(ev.date)}</div>
+      ${
+        timeDisplay
+          ? `<div>Time: ${timeDisplay}</div>`
+          : ""
+      }
+      <div>Details: ${ev.details}</div>
+      <button class="edit-btn">✏ Edit</button>
+      <button class="delete-btn">🗑 Delete</button>
+    </li>
+  `);
+});
 
     // Delete event
     $(".delete-btn").off("click").on("click", async function () {
@@ -446,74 +688,158 @@ $("#viewAllEvents").on("click", async function () {
     });
 
     // Edit event
-    $(".edit-btn").off("click").on("click", function () {
-      const li = $(this).closest("li");
-      const id = li.data("id");
-      const oldTitle = li.find("strong").text();
-      const oldDate = li.find("div").eq(0).text().replace("Date: ", "").trim();
-      const oldDetails = li
-        .find("div")
-        .eq(1)
-        .text()
-        .replace("Details: ", "")
-        .trim();
+$(".edit-btn").off("click").on("click", function () {
+  const li = $(this).closest("li");
+  const id = li.data("id");
+  const oldTitle = li.find("strong").text();
+  const oldDate = li.find("div").eq(0).text().replace("Date: ", "").trim();
+  const oldTime = li.find("div").eq(1).text().includes("Time:")
+    ? li.find("div").eq(1).text().replace("Time: ", "").trim()
+    : "";
+  const oldDetails = li.find("div").last().text().replace("Details: ", "").trim();
 
-      li.html(`
-        <form class="editForm">
-          <input type="text" name="title" value="${oldTitle}" required /><br>
-          <input type="date" name="date" value="${oldDate}" required /><br>
-          <input type="text" name="details" value="${oldDetails}" /><br>
-          <button type="submit">💾 Save</button>
-          <button type="button" class="cancelEdit">✖ Cancel</button>
-        </form>
-      `);
+  const [oldStart, oldEnd] = oldTime.includes("-")
+    ? oldTime.split(" - ").map((t) => t.trim())
+    : ["", ""];
 
-      li.find(".editForm").on("submit", async function (e) {
-        e.preventDefault();
-        const newTitle = $(this).find("input[name='title']").val().trim();
-        const newDate = $(this).find("input[name='date']").val().trim();
-        const newDetails =
-          $(this).find("input[name='details']").val().trim() || "(no details)";
+  li.html(`
+    <form class="editForm" style="text-align:left;">
+      <input type="text" name="title" value="${oldTitle}" required /><br>
+      <input type="date" name="date" value="${oldDate}" required /><br>
+      <input type="text" name="details" value="${oldDetails}" placeholder="(no details)" /><br>
 
-        try {
-          await updateDoc(doc(db, "appointments", id), {
-            title: newTitle,
-            date: newDate,
-            details: newDetails,
-          });
+      <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+        <label for="hasTime">Specific Time</label>
+        <input type="checkbox" id="hasTime" ${oldStart ? "checked" : ""}>
+      </div>
 
-          li.html(`
-            <strong>${newTitle}</strong>
-            <div>Date: ${newDate}</div>
-            <div>Details: ${newDetails}</div>
-            <button class="edit-btn">✏ Edit</button>
-            <button class="delete-btn">🗑 Delete</button>
-          `);
-        } catch (err) {
-          alert("Error updating event: " + err.message);
-        }
-      });
+      <div id="timeInputs" style="display:${oldStart ? "block" : "none"}; margin-top:4px;">
+        <input type="time" id="startTime" value="${oldStart}" placeholder="Start Time"><br>
+        <input type="time" id="endTime" value="${oldEnd}" placeholder="End Time"><br>
+      </div>
 
-      li.find(".cancelEdit").on("click", function () {
-        li.html(`
-          <strong>${oldTitle}</strong>
-          <div>Date: ${oldDate}</div>
-          <div>Details: ${oldDetails}</div>
-          <button class="edit-btn">✏ Edit</button>
-          <button class="delete-btn">🗑 Delete</button>
-        `);
-      });
+      <button type="submit">💾 Save</button>
+      <button type="button" class="cancelEdit">✖ Cancel</button>
+    </form>
+  `);
+
+  // Show/hide time fields
+  li.find("#hasTime").on("change", function () {
+    li.find("#timeInputs").toggle(this.checked);
+  });
+
+  // Save handler
+li.find(".editForm").on("submit", async function (e) {
+  e.preventDefault();
+
+  const newTitle = $(this).find("input[name='title']").val().trim();
+  const newDate = $(this).find("input[name='date']").val().trim();
+  const newDetails =
+    $(this).find("input[name='details']").val().trim() || "(no details)";
+  const hasTime = $(this).find("#hasTime").is(":checked");
+  let newStart = hasTime ? $(this).find("#startTime").val() : "";
+  let newEnd = hasTime ? $(this).find("#endTime").val() : "";
+
+  // If "Specific Time" is checked but both fields are blank, clear times completely
+  if (hasTime && !newStart && !newEnd) {
+    newStart = "";
+    newEnd = "";
+  }
+
+  try {
+    await updateDoc(doc(db, "appointments", id), {
+      title: newTitle,
+      date: newDate,
+      details: newDetails,
+      startTime: newStart,
+      endTime: newEnd,
     });
+
+    
+
+    li.html(`
+      <strong>${newTitle}</strong>
+      <div>Date: ${newDate}</div>
+      ${newStart && newEnd ? `<div>Time: ${newStart} - ${newEnd}</div>` : ""}
+      <div>Details: ${newDetails}</div>
+      <button class="edit-btn">✏ Edit</button>
+      <button class="delete-btn">🗑 Delete</button>
+    `);
+  } catch (err) {
+    alert("Error updating event: " + err.message);
+  }
+});
+
+
+  li.find(".cancelEdit").on("click", function () {
+    li.html(`
+      <strong>${oldTitle}</strong>
+      <div>Date: ${oldDate}</div>
+      ${oldStart ? `<div>Time: ${oldStart}${oldEnd ? ` - ${oldEnd}` : ""}</div>` : ""}
+      <div>Details: ${oldDetails}</div>
+      <button class="edit-btn">✏ Edit</button>
+      <button class="delete-btn">🗑 Delete</button>
+    `);
+  });
+});
+
   } catch (err) {
     console.error(err);
     $("#allEventsList").html("<li style='color:red;'>Error loading events.</li>");
   }
 });
 
-$("#backToCalendar").on("click", function () {
+$("#backToCalendar").on("click", async function () {
   $("#allEventsSection").hide();
   $("#calendar, #event-form, #topButtons, #calendar-controls, .weekdays").show();
+
+  //  Force a fresh sync when returning to calendar
+  const snapshot = await getDocs(collection(db, "appointments"));
+  liveEvents = [];
+  snapshot.forEach((docSnap) => {
+    liveEvents.push({ id: docSnap.id, ...docSnap.data() });
+  });
+
+  //  Re-render the calendar with latest updates
+  renderCalendar(currentMonth, currentYear, liveEvents);
+
+  
+  setupRealtimeListener(currentMonth, currentYear);
+
+  
+  refreshOpenPopup(liveEvents);
 });
+
+
+// ==============================
+// Helper to update "View All Events" dynamically
+// ==============================
+function updateAllEventsList(events) {
+  const list = $("#allEventsList");
+  list.empty();
+
+  if (events.length === 0) {
+    list.html("<li>No events found.</li>");
+    return;
+  }
+
+  events.sort((a, b) => new Date(normalizeDate(a.date)) - new Date(normalizeDate(b.date)));
+
+  events.forEach((ev) => {
+    list.append(`
+      <li data-id="${ev.id}">
+        <strong>${ev.title}</strong>
+        <div>Date: ${normalizeDate(ev.date)}</div>
+        ${ev.startTime && ev.endTime ? `<div>Time: ${ev.startTime} - ${ev.endTime}</div>` : ""}
+        <div>Details: ${ev.details}</div>
+        <button class="edit-btn">✏ Edit</button>
+        <button class="delete-btn">🗑 Delete</button>
+      </li>
+    `);
+  });
+}
+
+
 
 // ==============================
 // Jump to Today Button

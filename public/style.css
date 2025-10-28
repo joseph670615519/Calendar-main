@@ -352,3 +352,11 @@ header {
 #monthYearClickable:hover {
   color: #0078d7;
 }
+
+.other-month {
+  color: #999;
+  background: #f2f2f2;
+}
+.other-month:hover {
+  background: #e5e5e5;
+}

@@ -8,7 +8,6 @@
 
   <!-- Load jQuery -->
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-  
 </head>
 
 <body>
@@ -44,6 +43,15 @@
       <form id="addEventForm">
         <label>Title: <input type="text" id="title" required /></label><span class="error"></span><br>
         <label>Date: <input type="date" id="date" required /></label><span class="error"></span><br>
+
+        <div id="timeSection">
+          <label><input type="checkbox" id="hasTime"> Specific Time</label><br>
+          <div id="timeInputs" style="display:none;">
+            <label>Start Time: <input type="time" id="startTime"></label><br>
+            <label>End Time: <input type="time" id="endTime"></label><br>
+          </div>
+        </div>
+
         <label>Details: <input type="text" id="details" placeholder="optional" /></label><span class="error"></span><br>
         <button type="submit">Add Event</button>
       </form>
