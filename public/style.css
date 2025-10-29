@@ -103,12 +103,6 @@ header {
   font-weight: bold;
 }
 
-@media (max-width: 600px) {
-  .calendar-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 .popup-overlay {
   display: none;
   position: fixed;
@@ -303,7 +297,7 @@ header {
   color: #005fa3;
 }
 
-/* ✅ Centered Month/Year Grid */
+/*  Centered Month/Year Grid */
 .picker-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -361,7 +355,7 @@ header {
   background: #e5e5e5;
 }
 
-/* Put checkbox label + box side by side */
+/* Put checkbox label nd box side by side */
 #timeSection label {
   display: inline-flex;
   align-items: center;
@@ -370,7 +364,7 @@ header {
   white-space: nowrap;
 }
 
-/* Put "Details:" label and input side by side */
+/* Put "Details" label and input side by side */
 #event-form label[for="details"],
 #event-form label:has(#details) {
   display: inline-flex;
