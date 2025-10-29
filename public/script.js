@@ -169,9 +169,9 @@ for (let i = firstDay - 1; i >= 0; i--) {
   }
 
 const totalCells = firstDay + daysInMonth;
-const nextDays = 7 * Math.ceil(totalCells / 7) - totalCells;
+const nextDays = 42 - totalCells;
 
-// ==== Next month gray days (head) ====
+// ==== Next month grey days (head) ====
 for (let i = 1; i <= nextDays; i++) {
   const cell = $("<div>").addClass("day other-month").text(i);
   calendar.append(cell);
@@ -363,14 +363,14 @@ li.find(".editForm").on("submit", async function (e) {
     });
 }
 
-// ==== Gray-day month switching (after global click handler) ====
+// ==== Switch month when click a grey day ====
 $("#calendar").off("click", ".other-month").on("click", ".other-month", function (e) {
   e.stopImmediatePropagation();
   const dayText = parseInt($(this).text(), 10);
 
-  // Determine if it's a previous or next month gray day
-  const isPrev = $(this).index() < 7 && dayText > 20; // likely from previous month
-  const isNext = $(this).index() > 20 && dayText < 10; // likely from next month
+  // Determine if it's a previous or next month grey day
+  const isPrev = $(this).index() < 7 && dayText > 20; //  from previous month
+  const isNext = $(this).index() > 20 && dayText < 10; //  from next month
 
   if (isPrev) {
     changeMonth(-1, dayText);
@@ -382,7 +382,7 @@ $("#calendar").off("click", ".other-month").on("click", ".other-month", function
 
 
 
-// ==============================
+//  ==============================
 // Month Picker + Year Picker
 // ==============================
 function showMonthPicker(year) {
@@ -594,7 +594,7 @@ async function changeMonth(offset, targetDay = null) {
   // Re-attach listener for live updates
   setupRealtimeListener(currentMonth, currentYear);
 
-  // If a gray day was clicked, open its popup after render
+  // If a grey day was clicked, open its popup after render
   if (targetDay !== null) {
     setTimeout(() => {
       const newDate = new Date(currentYear, currentMonth, targetDay);
