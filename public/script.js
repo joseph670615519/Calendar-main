@@ -81,14 +81,14 @@ $(document).ready(function () {
 });
 
 // ==============================
-// Real-time Firestore Listener (fixed version)
+// Real-time Firestore Listener 
 // ==============================
 function setupRealtimeListener(month, year) {
-  if (unsubscribe) unsubscribe(); // detach old listener
+  if (unsubscribe) unsubscribe(); 
 
   const q = collection(db, "appointments");
   unsubscribe = onSnapshot(q, (snapshot) => {
-    liveEvents = []; // store latest snapshot globally
+    liveEvents = []; // store latest info
     snapshot.forEach((docSnap) => {
       liveEvents.push({ id: docSnap.id, ...docSnap.data() });
           if ($("#eventPopup").is(":visible")) {
@@ -138,7 +138,7 @@ function renderCalendar(month, year, events = []) {
 
 const prevMonthDays = 32 - new Date(year, month - 1, 32).getDate();
 
-// ==== Previous month gray days (tail) ====
+// === Previous month grey days (tail) ======
 for (let i = firstDay - 1; i >= 0; i--) {
   const day = prevMonthDays - i;
   const cell = $("<div>").addClass("day other-month").text(day);
@@ -182,7 +182,7 @@ for (let i = 1; i <= nextDays; i++) {
 
 // ========== POPUP HANDLER ==========
 $(".day").off("click").on("click", function (e) {
-  // Ignore gray cells (they already have special behavior)
+  // Ignore grey cells (they alrdy have special behavior)
   if ($(this).hasClass("blank") || $(this).hasClass("other-month")) return;
 
     const dayNumber = $(this).clone().children().remove().end().text().trim();
@@ -197,7 +197,7 @@ $(".day").off("click").on("click", function (e) {
     const popupList = $("#popupEvents");
     popupList.empty();
 
-    // --- Case 1: No events for this day ---
+    // ---- Case 1--- No events for this day 
     if (dayEvents.length === 0) {
       popupList.append(`
         <li class="add-event-section">
@@ -206,10 +206,10 @@ $(".day").off("click").on("click", function (e) {
           <button id="addEventNo">No</button>
         </li>
       `);
-      addInlineAddHandlers(popupList, formatted);
+      addEventButtons(popupList, formatted);
     }
 
-    // --- Case 2: Events exist for this day ---
+    // --- Case 2 --- Events exist for this day 
     else {
       dayEvents.forEach((ev) => {
       popupList.append(`
@@ -233,7 +233,7 @@ $(".day").off("click").on("click", function (e) {
         </li>
       `);
 
-      addInlineAddHandlers(popupList, formatted, true);
+      addEventButtons(popupList, formatted, true);
 
       // Delete event
       $(".delete-btn").off("click").on("click", async function () {
@@ -437,10 +437,10 @@ function showYearPicker(selectedYear) {
   });
 }
 
-// ==============================
-// Helper for inline add forms
-// ==============================
-function addInlineAddHandlers(popupList, formatted, isAnother = false) {
+// =============================
+// Helper for popup add buttons
+// ===========================
+function addEventButtons(popupList, formatted, isAnother = false) {
   const yesBtn = isAnother ? "#addAnotherYes" : "#addEventYes";
   const noBtn = isAnother ? "#addAnotherNo" : "#addEventNo";
 
@@ -451,7 +451,7 @@ function addInlineAddHandlers(popupList, formatted, isAnother = false) {
   $(yesBtn).off("click").on("click", function () {
 popupList.append(`
   <li>
-    <form id="inlineAddForm" style="text-align:left;">
+    <form id="popupAddForm" style="text-align:left;">
       <input type="text" id="newTitle" placeholder="Event title" required /><br>
       <input type="text" id="newDate" value="${formatted}" disabled /><br>
       <input type="text" id="newDetails" placeholder="(no details)" /><br>
@@ -482,7 +482,7 @@ $("#cancelAdd").on("click", function () {
   $("#eventPopup").fadeOut(200);
 });
 
-$("#inlineAddForm").on("submit", async function (e) {
+$("#popupAddForm").on("submit", async function (e) {
   e.preventDefault();
   const title = $("#newTitle").val().trim();
   const details = $("#newDetails").val().trim() || "(no details)";
@@ -553,7 +553,7 @@ function refreshOpenPopup(events) {
         <button id="addEventNo">No</button>
       </li>
     `);
-    addInlineAddHandlers(popupList, iso);
+    addEventButtons(popupList, iso);
   } else {
     dayEvents.forEach(ev => {
       popupList.append(`
